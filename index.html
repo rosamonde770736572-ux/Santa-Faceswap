@@ -1,115 +1,105 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Santa Face Swap</title>
-    <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/dist/face-api.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils"></script>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; background: #f0f2f5; padding: 20px; }
-        canvas { border: 8px solid #d42426; border-radius: 15px; max-width: 100%; margin-top: 20px; box-shadow: 0 10px 20px rgba(0,0,0,0.2); }
-        .controls { background: white; padding: 30px; border-radius: 15px; display: inline-block; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border-top: 5px solid #228b22; }
-        button { background: #228b22; color: white; border: none; padding: 12px 24px; cursor: pointer; border-radius: 5px; font-weight: bold; font-size: 16px; margin-top: 10px; }
-        button:disabled { background: #ccc; cursor: not-allowed; }
-        input[type="file"] { margin: 10px 0; }
-        #status { display: block; margin-top: 10px; font-weight: bold; color: #555; }
+        body { font-family: 'Segoe UI', sans-serif; text-align: center; background: #f0f2f5; padding: 20px; }
+        .container { background: white; padding: 20px; border-radius: 15px; display: inline-block; box-shadow: 0 4px 10px rgba(0,0,0,0.1); border-top: 8px solid #d42426; }
+        canvas { border: 4px solid #228b22; border-radius: 10px; max-width: 100%; margin-top: 20px; background: #eee; }
+        button { background: #d42426; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        #status { color: #d42426; font-weight: bold; margin: 10px; display: block; }
     </style>
 </head>
 <body>
 
     <h1>🎅 Santa Face Swap 🎄</h1>
-    
-    <div class="controls">
-        <p>Step 1: Wait for "Ready" status.<br>Step 2: Upload a photo of a face!</p>
-        <input type="file" id="imageUpload" accept="image/*" disabled>
-        <span id="status">⏳ Loading AI Models...</span>
-        <br>
-        <button id="downloadBtn" style="display:none;">🎁 Download Santa Photo</button>
+    <div class="container">
+        <span id="status">Initializing AI...</span>
+        <input type="file" id="upload" accept="image/*">
+        <br><br>
+        <button id="download" style="display:none">Download Photo</button>
     </div>
-
-    <div id="container">
-        <canvas id="canvas"></canvas>
-    </div>
+    <br>
+    <canvas id="canvas"></canvas>
 
     <script>
-        const imageUpload = document.getElementById('imageUpload');
+        const upload = document.getElementById('upload');
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
         const status = document.getElementById('status');
-        const downloadBtn = document.getElementById('downloadBtn');
+        const downloadBtn = document.getElementById('download');
 
-        // Load Santa Template
         const santaImg = new Image();
         santaImg.crossOrigin = "anonymous";
-        // This is a reliable Santa frame image
+        // Using a reliable Santa template
         santaImg.src = 'https://img.freepik.com/free-vector/santa-claus-holding-empty-frame_1308-78243.jpg';
 
-        async function loadModels() {
-            try {
-                // Using a direct CDN that specifically allows CORS for these models
-                const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/model/';
-                await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
-                await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
-                
-                status.innerText = "✅ Ready! Upload a photo.";
-                status.style.color = "#228b22";
-                imageUpload.disabled = false;
-            } catch (err) {
-                console.error(err);
-                status.innerText = "❌ Error loading AI. Try refreshing.";
-                status.style.color = "#d42426";
-            }
-        }
+        const faceDetection = new FaceDetection({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${file}`
+        });
 
-        imageUpload.addEventListener('change', async () => {
-            if (!imageUpload.files[0]) return;
-            
-            status.innerText = "✨ Magic in progress...";
-            downloadBtn.style.display = "none";
+        faceDetection.setOptions({ model: 'short', minDetectionConfidence: 0.5 });
 
-            // Prepare Canvas
-            canvas.width = santaImg.width;
-            canvas.height = santaImg.height;
-            ctx.drawImage(santaImg, 0, 0);
+        faceDetection.onResults((results) => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(santaImg, 0, 0, canvas.width, canvas.height);
 
-            // Process User Image
-            const img = await faceapi.bufferToImage(imageUpload.files[0]);
-            const detection = await faceapi.detectSingleFace(img, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks();
+            if (results.detections.length > 0) {
+                const face = results.detections[0].boundingBox;
+                const userImg = upload.userImage;
 
-            if (detection) {
-                const box = detection.detection.box;
-                
-                // Santa's face location on THIS specific template
-                const targetX = 330; 
-                const targetY = 180;
-                const targetWidth = 280;
-                const targetHeight = 320;
+                // Position for Santa's Face
+                const tx = canvas.width * 0.44; 
+                const ty = canvas.height * 0.22;
+                const tw = canvas.width * 0.18;
+                const th = canvas.height * 0.22;
 
-                // Clip into a nice oval shape
                 ctx.save();
                 ctx.beginPath();
-                ctx.ellipse(targetX + targetWidth/2, targetY + targetHeight/2, targetWidth/2, targetHeight/2, 0, 0, Math.PI * 2);
+                ctx.ellipse(tx + tw/2, ty + th/2, tw/2, th/2, 0, 0, Math.PI * 2);
                 ctx.clip();
                 
-                // Draw the face
-                ctx.drawImage(img, box.x, box.y, box.width, box.height, targetX, targetY, targetWidth, targetHeight);
+                // Draw user face
+                ctx.drawImage(userImg, 
+                    face.xCenter * userImg.width - (face.width * userImg.width / 2),
+                    face.yCenter * userImg.height - (face.height * userImg.height / 2),
+                    face.width * userImg.width, face.height * userImg.height,
+                    tx, ty, tw, th
+                );
                 ctx.restore();
-                
-                status.innerText = "Ho Ho Ho! It worked!";
+                status.innerText = "✅ Ho Ho Ho! Success!";
                 downloadBtn.style.display = "inline-block";
             } else {
-                status.innerText = "🚫 No face found. Use a clearer photo!";
+                status.innerText = "❌ No face found. Try another photo!";
             }
         });
 
-        downloadBtn.addEventListener('click', () => {
-            const link = document.createElement('a');
-            link.download = 'my-santa-photo.png';
-            link.href = canvas.toDataURL();
-            link.click();
+        upload.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.onload = (f) => {
+                const img = new Image();
+                img.onload = () => {
+                    upload.userImage = img;
+                    canvas.width = santaImg.width;
+                    canvas.height = santaImg.height;
+                    status.innerText = "🪄 Magic in progress...";
+                    faceDetection.send({image: img});
+                };
+                img.src = f.target.result;
+            };
+            reader.readAsDataURL(file);
         });
 
-        loadModels();
+        santaImg.onload = () => { status.innerText = "✅ Ready! Upload a face."; };
+        downloadBtn.onclick = () => {
+            const a = document.createElement('a');
+            a.download = 'santa-me.png';
+            a.href = canvas.toDataURL();
+            a.click();
+        };
     </script>
 </body>
 </html>
