@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Santa Face Swap</title>
+    <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+    <style>
+        body { font-family: sans-serif; text-align: center; background: #f4f4f4; padding: 20px; }
+        canvas { border: 5px solid #d42426; border-radius: 10px; max-width: 100%; margin-top: 20px; }
+        .controls { background: white; padding: 20px; border-radius: 10px; display: inline-block; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        button { background: #228b22; color: white; border: none; padding: 10px 20px; cursor: pointer; border-radius: 5px; }
+    </style>
+</head>
+<body>
+
+    <h1>🎅 Santa Face Swap 🎄</h1>
+    <div class="controls">
+        <p>1. Upload a clear photo of a face.</p>
+        <input type="file" id="imageUpload" accept="image/*">
+        <br><br>
+        <small id="status">Loading AI models...</small>
+    </div>
+
+    <div id="container">
+        <canvas id="canvas"></canvas>
+    </div>
+
+    <script>
+        const imageUpload = document.getElementById('imageUpload');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const status = document.getElementById('status');
+
+        // 1. Load the Santa Template (A Santa with a cutout or clear face area)
+        const santaImg = new Image();
+        santaImg.crossOrigin = "anonymous";
+        santaImg.src = 'https://img.freepik.com/free-vector/santa-claus-holding-empty-frame_1308-78243.jpg'; // Placeholder Santa
+
+        // 2. Load face-api models from CDN
+        async function loadModels() {
+            const MODEL_URL = 'https://justadudewhohacks.github.io/face-api.js/models';
+            await face-api.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+            await face-api.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+            status.innerText = "Ready! Upload a photo.";
+        }
+
+        imageUpload.addEventListener('change', async () => {
+            status.innerText = "Processing...";
+            
+            // Draw Santa Background first
+            canvas.width = santaImg.width;
+            canvas.height = santaImg.height;
+            ctx.drawImage(santaImg, 0, 0);
+
+            // Load user image
+            const file = imageUpload.files[0];
+            const userImg = await face-api.bufferToImage(file);
+
+            // Detect Face
+            const detection = await face-api.detectSingleFace(userImg, new face-api.TinyFaceDetectorOptions()).withFaceLandmarks();
+
+            if (detection) {
+                const box = detection.detection.box;
+                
+                // Define where Santa's face should be (Approximate coordinates for the template)
+                const targetX = 350; 
+                const targetY = 200;
+                const targetSize = 250;
+
+                // Draw user face onto Santa
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(targetX + targetSize/2, targetY + targetSize/2, targetSize/2, 0, Math.PI * 2);
+                ctx.clip(); // Round clip for the face
+                ctx.drawImage(userImg, box.x, box.y, box.width, box.height, targetX, targetY, targetSize, targetSize);
+                ctx.restore();
+                
+                status.innerText = "Ho Ho Ho! Done!";
+            } else {
+                status.innerText = "Could't find a face. Try again!";
+            }
+        });
+
+        loadModels();
+    </script>
+</body>
+</html>
